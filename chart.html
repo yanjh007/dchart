@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<header>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>空调系统温度-负载</title>
+    <script src="./apexcharts.min.js"></script>
+</header>
+
+<body>
+
+<h1>空调系统图表</h1>
+
+<div id="chart"></div>
+
+<script>
+
+const
+TZ_OFFSET =  new Date().getTimezoneOffset() * 60000;
+URL_BASE = "https://wjcrsinscftmoihkaimn.supabase.co/rest/v1",
+API_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqY3JzaW5zY2Z0bW9paGthaW1uIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcxNjQzMzc1MiwiZXhwIjoyMDMyMDA5NzUyfQ.omU8Y_le2MXVPBcNyvr76owlfPqXs0Xewqz2QFKwtpk",
+URL_MVALUES = URL_BASE + "/dl_mvalues",
+STD_HEADER = {
+    'Content-Type' : 'application/json' ,
+    "Authorization": "Bearer " + API_KEY,
+    "apikey": API_KEY,
+    "Range" : "0-14400"
+},
+STD_GET = {
+    method: 'GET', // 指定请求方法为 POST
+    headers: { ...STD_HEADER }
+},
+OPT_CHART = {
+    chart: { type: 'line' },        
+    series: [],
+    xaxis: { categories: [] },
+    yaxis: [
+    {
+        type: 'line',
+        seriesName: '室外温度'
+    },{
+        type: 'line',
+        seriesName: '室外温度'
+    },{
+        type: 'line',
+        seriesName: '主机功率',
+        opposite: true,
+        title: { text: "系统功率" }
+    }],
+};
+
+async function loadData() {
+    const COL = "?select=tmcode,mvalue"; // 时间， 指标值
+    const DV1 = "dvid=eq.WBWSD-00004"; // 外部温湿度计
+    const DV2 = "dvid=eq.JFWSD-00005"; // 机房温湿度计
+    const DV3 = "dvid=eq.HKXT-001";  // 环境控制系统
+    const IDX  = "mindex=eq.1011"; // 温度指标
+    const IDX3 = "mindex=eq.1029"; // 功率指标
+    const RNG  = "tmcode=gte.28531680&tmcode=lte.28545120)"; // 时间范围UTC
+    const ORD  = "order=tmcode"; // 时间范围UTC
+
+    // 室外温度
+    await new Promise((r,j)=>{
+        fetch(URL_MVALUES+[COL,DV1,IDX,RNG,ORD].join("&"), STD_GET)
+        .then(response => { // 处理响应
+            if (response.ok) return response.json();
+            throw new Error('Network response was not ok.');
+        })
+        .then(data => { // 在这里处理解析后的数据
+            // console.log(data);
+            // sort data
+            data = data.sort((a,b)=> parseInt(a.tmcode) - parseInt(b.mvalue));
+
+            // index data 
+            OPT_CHART.series[0] = { name: '室外温度'};
+            OPT_CHART.series[0].data = data.map(v=>v.mvalue);
+
+            // catagories to date
+            OPT_CHART.xaxis.categories = data.map(v=>(new Date(parseInt(v.tmcode)*60000 - TZ_OFFSET).toISOString().slice(0,16)));
+
+            r(1);
+            // showChart(options);
+        })
+        .catch(error => { // 在这里处理发生的错误
+            console.error('There has been a problem with your fetch operation:', error);
+            r(null);
+        });
+    });
+
+    // 室内温度
+    await new Promise((r,j)=>{
+        fetch(URL_MVALUES+[COL,DV2,IDX,RNG,ORD].join("&"), STD_GET)
+        .then(response => { // 处理响应
+            if (response.ok) return response.json();
+            throw new Error('Network response was not ok.');
+        })
+        .then(data => { // 在这里处理解析后的数据
+            data = data.sort((a,b)=> parseInt(a.tmcode) - parseInt(b.mvalue));
+
+            // index data 
+            OPT_CHART.series[1] = { name: '室内温度'};
+            OPT_CHART.series[1].data = data.map(v=>v.mvalue);
+
+            // catagories to date
+            OPT_CHART.xaxis.categories = data.map(v=>(new Date(parseInt(v.tmcode)*60000 - TZ_OFFSET).toISOString().slice(0,16)));
+
+            r(2);
+        })
+        .catch(error => { // 在这里处理发生的错误
+            console.error('There has been a problem with your fetch operation:', error);
+            r(null);
+        });
+    });
+
+    // 主机功率
+    await new Promise((r,j)=>{
+        fetch(URL_MVALUES+[COL,DV3,IDX3,RNG,ORD,ORD].join("&"), STD_GET)
+        .then(response => { // 处理响应
+            if (response.ok) return response.json();
+            throw new Error('Network response was not ok.');
+        })
+        .then(data => { // 在这里处理解析后的数据
+            data = data.sort((a,b)=> parseInt(a.tmcode) - parseInt(b.mvalue));
+
+            // index data 
+            OPT_CHART.series[2] = { name: '主机功率'};
+            OPT_CHART.series[2].data = data.map(v=>v.mvalue);
+
+            // catagories to date
+            OPT_CHART.xaxis.categories = data.map(v=>(new Date((parseInt(v.tmcode)+480)*60000).toISOString().slice(0,16)));
+
+            r(3);
+        })
+        .catch(error => { // 在这里处理发生的错误
+            console.error('There has been a problem with your fetch operation:', error);
+            r(null);
+        });
+    });
+
+    showChart(OPT_CHART);
+}
+
+function showChart(data) {
+    var chart = new ApexCharts(document.querySelector("#chart"), data);
+
+    chart.render();
+}
+
+// load data
+window.addEventListener('load', (event) => {
+    loadData();
+});
+
+</script>
+
+</body>
+</html> 
